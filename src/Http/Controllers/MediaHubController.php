@@ -43,7 +43,7 @@ class MediaHubController extends Controller
 
     public function getSingleMedia(Request $request, $mediaId)
     {
-        $media = MediaHub::getMedia($mediaId)->formatForNova();
+        $media = MediaHub::getQuery()->findOrFail($mediaId)->formatForNova();
         return response()->json($media, 200);
     }
 
