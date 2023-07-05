@@ -41,6 +41,12 @@ class MediaHubController extends Controller
         return response()->json($media, 200);
     }
 
+    public function getSingleMedia(Request $request, $mediaId)
+    {
+        $media = MediaHub::getMedia($mediaId)->formatForNova();
+        return response()->json($media, 200);
+    }
+
     public function uploadMediaToCollection(Request $request)
     {
         $files = $request->allFiles()['files'] ?? [];
