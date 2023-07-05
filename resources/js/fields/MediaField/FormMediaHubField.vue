@@ -82,6 +82,7 @@ export default {
     mediaItemsSelected(mediaItems) {
       this.value = mediaItems;
       this.showChooseModal = false;
+      this.$emit('input');
     },
 
     fill(formData) {
