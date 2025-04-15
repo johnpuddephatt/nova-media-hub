@@ -33,6 +33,8 @@ class FileHandler
     protected string $collectionName = '';
     protected array $modelData = [];
     protected bool $deleteOriginal = false;
+    protected bool $allowDuplicates = false;
+    protected ?\Closure $shouldSave = null;
 
     public function __construct()
     {
@@ -118,6 +120,12 @@ class FileHandler
         return $this;
     }
 
+    public function shouldSave(\Closure $shouldSave)
+    {
+        $this->shouldSave = $shouldSave;
+        return $this;
+    }
+
     public function save($file = null): ?Media
     {
         if (!empty($file)) $this->withFile($file);
@@ -134,22 +142,42 @@ class FileHandler
         }
     }
 
+    public function allowDuplicates($allowDuplicates = true)
+    {
+        $this->allowDuplicates = $allowDuplicates;
+        return $this;
+    }
+
     private function saveFile(): ?Media
     {
         // Check if file already exists
         $fileHash = FileHelpers::getFileHash($this->pathToFile);
-        $existingMedia = MediaHub::getQuery()->where('original_file_hash', $fileHash)->first();
-        if ($existingMedia) {
-            $existingMedia->updated_at = now();
-            $existingMedia->save();
-            $existingMedia->wasExisting = true;
 
-            // Delete original
-            if ($this->deleteOriginal && is_file($this->pathToFile)) {
-                unlink($this->pathToFile);
+        if (!$this->allowDuplicates) {
+            if (config('nova-media-hub.check_legacy_hashes')) {
+                $legacyFileHash = FileHelpers::getLegacyFileHash($this->pathToFile);
+
+                $existingMedia = MediaHub::getQuery()->whereIn('original_file_hash', [$fileHash, $legacyFileHash])->first();
+            } else {
+                $existingMedia = MediaHub::getQuery()->where('original_file_hash', $fileHash)->first();
             }
 
-            return $existingMedia;
+            if ($existingMedia) {
+                $existingMedia->updated_at = now();
+                $existingMedia->save();
+                $existingMedia->wasExisting = true;
+
+                // Delete original
+                if ($this->deleteOriginal && is_file($this->pathToFile)) {
+                    unlink($this->pathToFile);
+                }
+
+                if (! $existingMedia->optimized_at) {
+                    MediaHubOptimizeAndConvertJob::dispatch($existingMedia);
+                }
+
+                return $existingMedia;
+            }
         }
 
         $sanitizedFileName = FileHelpers::sanitizeFileName($this->fileName);
@@ -165,10 +193,14 @@ class FileHandler
         $fileValidator->validateFile($this->collectionName, $this->pathToFile, $this->fileName, $extension, $mimeType, $fileSize);
 
         $mediaClass = MediaHub::getMediaModel();
-        $media = new $mediaClass($this->modelData ?? []);
+
+        /** @var \Outl1ne\NovaMediaHub\Models\Media */
+        $media = new $mediaClass();
+        $media->forceFill($this->modelData ?? []);
+        if ($media->id) $media->exists = true;
 
         $media->file_name = $this->fileName;
-        $media->collection_name = $this->collectionName;
+        $media->collection_name ??= $this->collectionName;
         $media->size = $fileSize;
         $media->mime_type = $mimeType;
         $media->original_file_hash = $fileHash;
@@ -180,6 +212,17 @@ class FileHandler
 
         $media->conversions_disk = $this->getConversionsDiskName();
         $this->ensureDiskExists($media->conversions_disk);
+
+        // Last pre-save check
+        if (is_callable($this->shouldSave)) {
+            $shouldSave = call_user_func($this->shouldSave, $media);
+            if (!$shouldSave) {
+                if ($this->deleteOriginal && $this->pathToFile) {
+                    unlink($this->pathToFile);
+                }
+                return null;
+            }
+        }
 
         $media->save();
 

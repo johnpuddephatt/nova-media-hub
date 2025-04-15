@@ -51,7 +51,38 @@ class FileHelpers
 
         try {
             $fileStream = ($disk) ? Storage::disk($disk)->readStream($path) : fopen($path, 'r');
+            $fileSize = $disk ? Storage::disk($disk)->size($path) : filesize($path);
+            $fileHash = md5($fileSize.fread($fileStream, 1000000));
+
+            fclose($fileStream);
+        } catch (Exception $e) {
+            return null;
+        }
+
+        return $fileHash;
+    }
+
+    /**
+     * Uses only the first 1000000 bytes of the file to generate a hash, which may cause collisions for files with the same beginning.
+     *
+     * @param  string  $path
+     * @param  string|null  $disk
+     *
+     * @return string
+     */
+    public static function getLegacyFileHash(string $path, ?string $disk = null): string
+    {
+        if (! $path) {
+            return null;
+        }
+        if (! $disk && ! is_file($path)) {
+            return null;
+        }
+
+        try {
+            $fileStream = ($disk) ? Storage::disk($disk)->readStream($path) : fopen($path, 'r');
             $fileHash = md5(fread($fileStream, 1000000));
+
             fclose($fileStream);
         } catch (Exception $e) {
             return null;
@@ -97,10 +128,12 @@ class FileHelpers
         return [$name, $extension];
     }
 
-    public static function getTemporaryFilePath($prefix = 'media-')
+    public static function getTemporaryFilePath($prefix = 'media-', $extension = null)
     {
         if (!$prefix) $prefix = '';
         if (!str_ends_with($prefix, '-')) $prefix = "{$prefix}-";
-        return tempnam(sys_get_temp_dir(), "o1-nmh{$prefix}");
+        $path = tempnam(sys_get_temp_dir(), "o1-nmh{$prefix}");
+        if ($extension) return "{$path}.{$extension}";
+        return $path;
     }
 }

@@ -111,6 +111,31 @@ The config file can be published using the following command:
 php artisan vendor:publish --provider="Outl1ne\NovaMediaHub\MediaHubServiceProvider" --tag="config"
 ```
 
+### Custom optimizer chain
+
+You can define a custom optimizer chain or add items to it like so:
+
+```php
+// in app/Providers/AppServiceProvided.php
+
+public function register() {
+  // ...
+
+  // https://github.com/spatie/image-optimizer#creating-your-own-optimization-chains
+  \Outl1ne\NovaMediaHub\MediaHub::withOptimizerChain(
+    (new OptimizerChain)
+      ->addOptimizer(new Jpegoptim([
+        '--strip-all',
+        '--all-progressive',
+      ]))
+      ->addOptimizer(new Pngquant([
+        '--force',
+      ]))
+  );
+}
+
+```
+
 ## Localization
 
 The translation file(s) can be published by using the following command:

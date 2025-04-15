@@ -4,22 +4,22 @@
       <ModalHeader v-text="__('novaMediaHub.moveCollectionTitle')" />
 
       <ModalContent class="o1-flex o1-flex-col">
-        <p class="o1-leading-tight">{{ __('novaMediaHub.moveCollectionText') }}</p>
+        <p class="o1-leading-tight o1-mb-2">{{ __('novaMediaHub.moveCollectionText') }}</p>
 
-        <SelectControl v-model:selected="collection" @change="c => (collection = c)">
+        <SelectControl class="o1-capitalize" v-model:selected="collection" @change="c => (collection = c)">
           <option v-for="c in filteredCollections" :key="c" :value="c">{{ c }}</option>
         </SelectControl>
       </ModalContent>
 
       <ModalFooter>
         <div class="o1-ml-auto">
-          <LinkButton type="button" @click.prevent="$emit('close')" class="o1-mr-3">
+          <Button variant="link" state="mellow" type="button" @click.prevent="$emit('close')" class="o1-mr-3">
             {{ __('novaMediaHub.closeButton') }}
-          </LinkButton>
+          </Button>
 
-          <LoadingButton @click.prevent="handleMove" :disabled="loading" :processing="loading">{{
-            __('novaMediaHub.moveButton')
-          }}</LoadingButton>
+          <Button @click.prevent="handleMove" :disabled="loading">
+            {{ __('novaMediaHub.moveButton') }}
+          </Button>
         </div>
       </ModalFooter>
     </div>
@@ -29,14 +29,13 @@
 <script>
 import API from '../api';
 import HandlesMediaLists from '../mixins/HandlesMediaLists';
+import { Button } from 'laravel-nova-ui';
 
 export default {
+  components: { Button },
   mixins: [HandlesMediaLists],
-
   emits: ['confirm', 'close'],
-
   props: ['show', 'mediaItem'],
-
   data: () => ({ loading: false }),
 
   async mounted() {

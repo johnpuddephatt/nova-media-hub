@@ -4,7 +4,6 @@ namespace Outl1ne\NovaMediaHub\MediaHandler\Support;
 
 use Spatie\Image\Image;
 use Illuminate\Support\Str;
-use Spatie\Image\Manipulations;
 use Outl1ne\NovaMediaHub\MediaHub;
 use Outl1ne\NovaMediaHub\Models\Media;
 
@@ -15,28 +14,35 @@ class MediaOptimizer
         if (!empty($media->optimized_at)) return;
         if (!Str::startsWith($media->mime_type, 'image')) return;
         if (!MediaHub::isOptimizable($media)) return;
-        if (!$origOptimRules = MediaHub::shouldOptimizeOriginal($media)) return;
 
         $fileSystem = self::getFilesystem();
 
-        $manipulations = (new Manipulations());
-        $manipulations->optimize(config('nova-media-hub.image_optimizers'));
-
-        if ($maxDimens = $origOptimRules['max_dimensions']) {
-            $manipulations->fit(Manipulations::FIT_MAX, $maxDimens, $maxDimens);
-        }
-
-        $manipulations->apply();
+        $manipulator = MediaHub::getMediaManipulator();
+        if (!$manipulator->shouldOptimizeOriginal($media)) return;
 
         // Copy media from whatever disk to local filesystem for manipulations
         if (!$localFilePath || !is_file($localFilePath)) {
-            $localFilePath = FileHelpers::getTemporaryFilePath();
-            $fileSystem->copyFromMediaLibrary($media, $localFilePath);
+            $localFilePath = FileHelpers::getTemporaryFilePath(extension: $media->getExtension());
+            $localFilePath = $fileSystem->copyFromMediaLibrary($media, $localFilePath);
+            if (!$localFilePath) return;
         }
 
-        // Load and save modified version
-        static::manipulate($localFilePath, $manipulations);
+        $image = Image::load($localFilePath);
+        if ($driver = MediaHub::getImageDriver()) $image->useImageDriver($driver);
+        $image->optimize(MediaHub::getOptimizerChain());
+        $image = $manipulator->manipulateOriginal($media, $image);
+        $image->save();
 
+        // Rename file if mime type has changed
+        $newMimeType = FileHelpers::getMimeType($localFilePath);
+        if ($media->mime_type !== $newMimeType) {
+            $media->mime_type = $newMimeType;
+
+            $newExtension = FileHelpers::getExtensionFromMimeType($newMimeType);
+            $media->file_name = str($media->file_name)->beforeLast('.') . ".{$newExtension}";
+        }
+
+        $media->mime_type = FileHelpers::getMimeType($localFilePath);
         $media->size = filesize($localFilePath);
         $media->optimized_at = now();
 
@@ -54,28 +60,20 @@ class MediaOptimizer
         $pathMaker = MediaHub::getPathMaker();
         $fileSystem = self::getFilesystem();
 
-        // Check if has necessary data for resize
-        $cFormat = $conversionConfig['format'] ?? null;
-        $cFitMethod = $conversionConfig['fit'] ?? null;
-        $cWidth = $conversionConfig['width'] ?? null;
-        $cHeight = $conversionConfig['height'] ?? null;
-
-        $manipulations = (new Manipulations())
-            ->optimize(config('nova-media-hub.image_optimizers'))
-            ->fit($cFitMethod, $cWidth, $cHeight);
-
-        if ($cFormat) $manipulations->format($cFormat);
-
-        $manipulations = $manipulations->apply();
+        $manipulator = MediaHub::getMediaManipulator();
 
         // Copy media from whatever disk to local filesystem for manipulations
         if (!$localFilePath || !is_file($localFilePath)) {
-            $localFilePath = FileHelpers::getTemporaryFilePath();
-            $fileSystem->copyFromMediaLibrary($media, $localFilePath);
+            $localFilePath = FileHelpers::getTemporaryFilePath(extension: $media->getExtension());
+            $localFilePath = $fileSystem->copyFromMediaLibrary($media, $localFilePath);
+            if (!$localFilePath) return;
         }
 
-        // Load and save modified version
-        static::manipulate($localFilePath, $manipulations);
+        $image = Image::load($localFilePath);
+        if ($driver = MediaHub::getImageDriver()) $image->useImageDriver($driver);
+        $image->optimize(MediaHub::getOptimizerChain());
+        $image = $manipulator->manipulateConversion($media, $image, $conversionName, $conversionConfig);
+        $image->save();
 
         $conversionFileName = $pathMaker->getConversionFileName($media, $conversionName);
         $fileSystem->copyFileToMediaLibrary($localFilePath, $media, $conversionFileName, Filesystem::TYPE_CONVERSION, false);
@@ -90,12 +88,5 @@ class MediaOptimizer
     protected static function getFilesystem(): Filesystem
     {
         return app()->make(Filesystem::class);
-    }
-
-    protected static function manipulate($path, $manipulations)
-    {
-        $image = Image::load($path)->manipulate($manipulations);
-        if ($driver = MediaHub::getImageDriver()) $image->useImageDriver($driver);
-        $image->save();
     }
 }

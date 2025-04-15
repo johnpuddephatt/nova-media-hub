@@ -89,9 +89,16 @@ class Filesystem
         }
     }
 
-    public function copyFromMediaLibrary(Media $media, string $targetFilePath): string
+    public function copyFromMediaLibrary(Media $media, string $targetFilePath): ?string
     {
         $filePath = $this->getMediaDirectory($media) . $media->file_name;
+
+        $exists = $this->filesystem->disk($media->disk)->exists($filePath);
+        if (!$exists) {
+            report(new FileDoesNotExistException("Tried to copy file for media [$media->id] but it did not exist."));
+            return null;
+        }
+
         $fileStream = $this->filesystem->disk($media->disk)->readStream($filePath);
         file_put_contents($targetFilePath, $fileStream);
         if (is_resource($fileStream)) fclose($fileStream);
@@ -119,7 +126,7 @@ class Filesystem
     public function makeTemporaryCopy($localFilePath)
     {
         if (!is_file($localFilePath)) throw new FileDoesNotExistException($localFilePath);
-        $newFilePath = FileHelpers::getTemporaryFilePath('tmp-conversion-copy');
+        $newFilePath = FileHelpers::getTemporaryFilePath('tmp-conversion-copy', extension: str($localFilePath)->afterLast('.')->toString());
         if (!copy($localFilePath, $newFilePath)) {
             $err = error_get_last();
             throw new Exception($err['message'] ?? 'Copy failed due to unknown error.');

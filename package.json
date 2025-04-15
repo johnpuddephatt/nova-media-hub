@@ -16,6 +16,7 @@
     "laravel-mix": "^6.0.49",
     "postcss": "^8.4.18",
     "postcss-import": "^15.0.0",
+    "postcss-rtlcss": "^3.6.3",
     "prettier": "^2.7.1",
     "resolve-url-loader": "^5.0.0",
     "sass": "^1.55.0",
@@ -27,6 +28,8 @@
     "vuex": "^4.1.0"
   },
   "dependencies": {
+    "laravel-nova-ui": "^0.4.12",
+    "lodash.debounce": "^4.0.8",
     "vue": "^3.2.41",
     "vue-simple-context-menu": "^4.0.4",
     "vuedraggable": "^4.1.0"

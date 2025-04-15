@@ -18,7 +18,7 @@
             <div class="o1-leading-tight text-primary-500 o1-font-bold o1-text-md o1-mb-2">
               {{ __('novaMediaHub.selectedMediaTitle') + (selectedCount > 1 ? ` (${selectedCount})` : '') }}
             </div>
-            <div class="o1-flex overflow-x-auto o1-pt-1 o1-px-1" v-if="!!selectedCount">
+            <div class="o1-flex overflow-x-auto o1-pt-1 o1-px-1" v-show="!!selectedCount">
               <Draggable v-model="selectedMediaItems" item-key="id" class="o1-flex o1-flex-shrink-0">
                 <template #item="{ element: mediaItem }">
                   <MediaItem
@@ -35,7 +35,7 @@
                 </template>
               </Draggable>
             </div>
-            <div v-else-if="!selectedCount" class="o1-text-slate-400 o1-mb-4">
+            <div v-show="!selectedCount" class="o1-text-slate-400 o1-mb-4">
               {{ __('novaMediaHub.noMediaSelectedText') }}
             </div>
           </div>
@@ -44,14 +44,15 @@
             <div class="o1-flex o1-flex-col o1-gap-5 o1-w-full lg:o1-max-w-xs overflow-y-auto o1-py-4">
               <!-- Choose collection -->
               <ModalFilterItem :title="__('novaMediaHub.chooseCollectionTitle')">
-                <SelectControl v-model:selected="collection" @change="c => (collection = c)">
+                <SelectControl class="o1-capitalize" v-model:selected="collection" @change="c => (collection = c)">
                   <option value="">{{ __('novaMediaHub.showAll') }}</option>
                   <option v-for="c in collections" :key="c" :value="c">{{ c }}</option>
                 </SelectControl>
               </ModalFilterItem>
 
-              <LoadingButton v-if="someMediaItemsNotInCurrentCollection"
-                @click.prevent="moveToCollection">{{ __('novaMediaHub.moveToCollectionTitle') }}</LoadingButton>
+              <Button v-show="someMediaItemsNotInCurrentCollection" @click.prevent="moveToCollection">
+                {{ __('novaMediaHub.moveToCollectionTitle') }}
+              </Button>
 
               <!-- Search -->
               <ModalFilterItem :title="__('novaMediaHub.searchMediaTitle')">
@@ -92,7 +93,7 @@
                 <div
                   id="media-items-list"
                   class="o1-w-full flex flex-wrap o1-gap-4 o1-justify-items-center o1-p-1"
-                  v-show="!!mediaItems.length"
+                  v-show="!!mediaItems.length && !mediaLoading"
                 >
                   <MediaItem
                     v-for="mediaItem in mediaItems"
@@ -109,13 +110,17 @@
                 </div>
               </div>
 
-              <div v-show="!mediaItems.length" class="o1-text-slate-400">
+              <div v-show="!mediaItems.length && !mediaLoading" class="o1-text-slate-400">
                 {{ __('novaMediaHub.noMediaItemsFoundText') }}
+              </div>
+
+              <div v-if="mediaLoading">
+                <Loader class="text-gray-300 o1-mt-5" width="30" />
               </div>
 
               <PaginationLinks
                 v-show="mediaResponse.last_page > 1"
-                class="o1-mt-auto o1-w-full o1-border-t o1-border-slate-200 o1-border-l dark:o1-border-gray-700"
+                class="o1-mt-auto o1-w-full o1-border o1-border-slate-200 o1-border-l dark:o1-border-gray-700 o1-rounded-b-lg"
                 style="border-radius: 0px"
                 :page="mediaResponse.current_page"
                 :pages="mediaResponse.last_page"
@@ -128,11 +133,11 @@
 
       <ModalFooter>
         <div class="ml-auto">
-          <CancelButton @click.prevent="$emit('close')" class="o1-mr-4">
+          <Button variant="link" state="mellow" @click.prevent="$emit('close')" class="o1-mr-4">
             {{ __('novaMediaHub.closeButton') }}
-          </CancelButton>
+          </Button>
 
-          <LoadingButton @click.prevent="confirm">{{ __('novaMediaHub.confirmButton') }}</LoadingButton>
+          <Button @click.prevent="confirm">{{ __('novaMediaHub.confirmButton') }}</Button>
         </div>
       </ModalFooter>
     </LoadingCard>
@@ -154,6 +159,7 @@
       :mediaItem="ctxMediaItem"
       @optionClick="contextOptionClick"
       :readonly="field.readonly"
+      @dataUpdated="dataUpdated"
     />
   </Modal>
 </template>
@@ -170,6 +176,7 @@ import ModalFilterItem from '../components/ModalFilterItem';
 import MediaOrderSelect from '../components/MediaOrderSelect';
 import MediaViewModal from '../modals/MediaViewModal';
 import HandlesMediaUpload from '../mixins/HandlesMediaUpload';
+import { Button } from 'laravel-nova-ui';
 
 export default {
   mixins: [HandlesMediaLists, HandlesMediaUpload],
@@ -182,17 +189,20 @@ export default {
     ModalFilterItem,
     MediaOrderSelect,
     MediaViewModal,
+    Button,
   },
 
   emits: ['close', 'confirm'],
   props: ['show', 'field', 'activeCollection', 'initialSelectedMediaItems'],
 
-  data: () => ({
+  data: self => ({
     selectedMediaItems: [],
 
     loading: false,
+    mediaLoading: false,
     showConfirmDeleteModal: false,
     showMediaViewModal: false,
+    collection: self.$props.field?.defaultCollectionName || void 0,
 
     ctxOptions: [],
     ctxMediaItem: void 0,
@@ -202,21 +212,20 @@ export default {
 
   created() {
     this.$watch(
-      () => ({ collection: this.collection, search: this.search, orderBy: this.orderBy }),
-      data => this.getMedia({ ...data, page: 1 })
+      () => ({ collection: this.collection, search: this.search, orderBy: this.orderBy, show: this.show }),
+      async data => {
+        if (!data.show) return;
+        await this.refresh(1);
+      }
     );
-  },
-
-  async mounted() {
-    if (this.field.defaultCollectionName) this.collection = this.field.defaultCollectionName;
-    await this.getCollections();
-    this.$nextTick(() => (this.loading = false));
   },
 
   watch: {
     async show(newValue) {
       if (newValue) {
-        await this.getCollections();
+        // Let it be async
+        this.getCollections();
+
         this.selectedCollection = this.activeCollection;
 
         const iniVal = this.initialSelectedMediaItems;
@@ -232,6 +241,17 @@ export default {
   },
 
   methods: {
+    async refresh(page = null) {
+      this.mediaLoading = true;
+      await this.getMedia({
+        collection: this.collection,
+        search: this.search,
+        orderBy: this.orderBy,
+        page: page || this.currentPage,
+      });
+      this.mediaLoading = false;
+    },
+
     async uploadFiles(selectedFiles) {
       this.loading = true;
 
@@ -246,8 +266,11 @@ export default {
     },
 
     async moveToCollection() {
-      await API.moveMediaToCollection(this.selectedMediaItems.map(mi => mi.id), this.collection);
-      this.selectedMediaItems.forEach(mi => mi.collection_name = this.collection);
+      await API.moveMediaToCollection(
+        this.selectedMediaItems.map(mi => mi.id),
+        this.collection
+      );
+      this.selectedMediaItems.forEach(mi => (mi.collection_name = this.collection));
 
       Nova.$toasted.success(this.__('novaMediaHub.successfullyMovedToCollection', { collection: this.collection }));
       await this.getMedia({ collection: this.collection });
@@ -278,6 +301,7 @@ export default {
         { type: 'divider' },
         { name: this.__('novaMediaHub.contextDeselect'), action: 'deselect', class: 'warning' },
         { name: this.__('novaMediaHub.contextDeselectOthers'), action: 'deselect-others', class: 'warning' },
+        { name: this.__('novaMediaHub.contextReplace'), action: 'replace', class: 'warning' },
       ];
 
       this.$nextTick(() => (this.ctxShowEvent = event));
@@ -290,6 +314,7 @@ export default {
         { name: this.__('novaMediaHub.contextViewEdit'), action: 'view' },
         { name: this.__('novaMediaHub.contextDownload'), action: 'download' },
         { type: 'divider' },
+        { name: this.__('novaMediaHub.contextReplace'), action: 'replace', class: 'warning' },
         { name: this.__('novaMediaHub.contextDelete'), action: 'delete', class: 'warning' },
       ];
 
@@ -339,6 +364,16 @@ export default {
       // Close only if context isn't showing anything
       if (!this.ctxShowingModal && !this.showConfirmDeleteModal && !this.showMediaViewModal) {
         this.$emit('close');
+      }
+    },
+
+    dataUpdated(media) {
+      if (media) {
+        const i1 = this.selectedMediaItems.findIndex(m => m.id === media.id);
+        this.selectedMediaItems[i1] = media;
+
+        const i2 = this.mediaItems.findIndex(m => m.id === media.id);
+        this.mediaItems[i2] = media;
       }
     },
   },

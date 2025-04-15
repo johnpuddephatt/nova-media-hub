@@ -5,6 +5,128 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 09-09-2024
+
+### Changed
+
+- Fix hash collision detection for images where the first megabyte is the same (huge thanks to [@schniper](https://github.com/schniper))
+- Updated packages
+
+NB! Existing users should set config option 'check_legacy_hashes' to true if they want to keep checking for collisions with media uploaded prior to this update.
+
+## [2.0.5] - 30-07-2024
+
+### Changed
+
+- Fix crash related to updating data (title, alt) fields
+
+## [2.0.4] - 18-06-2024
+
+### Changed
+
+- Fix file extension not changing after mime type change during optimization
+
+## [2.0.3] - 18-06-2024
+
+### Changed
+
+- Fix config not optimizable
+
+## [2.0.2] - 18-06-2024
+
+### Changed
+
+- Fixes to TIFF optimizing
+- Added `media_optimizers` config option
+
+## [2.0.1] - 22-04-2024
+
+### Added
+
+- Added new `shouldSave` callback to allow user to run last minute checks on media before it enters the pipeline
+
+## [2.0.0] - 04-04-2024
+
+### Changed
+
+- Upgraded spatie/image from version 2 to 3
+- Removed Manipulations API's from `MediaManipulator` and replaced them with direct `\Spatie\Image\Image` manipulations
+- Removed `image_optimizers` config option and replaced it with MediaHub tool `->withOptimizerChain()`
+- `Manipulations::FIT_MAX` has been replaced with `\Spatie\Image\Enums\Fit::Max`
+
+## [1.8.1] - 04-04-2024
+
+### Changed
+
+- Reverted (spatie/image: 3 => 2)
+
+## [1.8.0] - 03-04-2024
+
+### Added
+
+- Added new "Replace in-place" functionality
+
+### Changed
+
+- Fixed encode/decode bugs with MediaCast (thanks to [@nullthoughts](https://github.com/nullthoughts))
+- Bumped some minimum required versions (spatie/image: 2 => 3, laravel/nova: => 4.0 => 4.29)
+- Fixed defaultCollectionName not working
+- Updated packages
+
+## [1.7.6] - 30-01-2024
+
+### Changed
+
+- Dispatch optimize job when file with the same hash was already found just in case
+
+## [1.7.5] - 29-01-2024
+
+### Changed
+
+- Fixed issues with duplicate API calls to Media Hub API routes when rendering form fields
+- Improved choose media modal loading order and added loader
+
+## [1.7.4] - 29-01-2024
+
+### Changed
+
+- Improved latest migration to handle errors in case the user has already added the same index(es) in their own project
+
+## [1.7.3] - 29-01-2024
+
+### Changed
+
+- Immensely improve Media Hub performance by adding missing indexes to some database columns
+
+NB! Requires running migrations.
+
+## [1.7.2] - 29-01-2024
+
+### Changed
+
+- Fixed missing Nova button styles that Nova removed in 4.28.x
+- Updated packages
+
+## [1.7.1] - 27-09-2023
+
+### Changed
+
+- Fixed crashes when media hub tries to optimize non-existant files
+
+## [1.7.0] - 27-09-2023
+
+### Added
+
+- Added new MediaManipulator class that allows better customization of image optimization/conversions
+- Added debounce to search field to reduce queries
+- Added loader to search
+
+### Changed
+
+- Made collections case-insensitive
+- Fixed some UI problems with latest Nova
+- Removed Media from global search
+
 ## [1.6.2] - 03-07-2023
 
 ### Changed

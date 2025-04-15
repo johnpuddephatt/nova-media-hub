@@ -67,13 +67,13 @@
 
       <ModalFooter>
         <div class="ml-auto">
-          <CancelButton @click.prevent="$emit('close')" class="o1-mr-4">
+          <Button variant="link" state="mellow" @click.prevent="$emit('close')" class="o1-mr-4">
             {{ __('novaMediaHub.close') }}
-          </CancelButton>
+          </Button>
 
-          <LoadingButton v-if="!readonly" @click.prevent="saveAndExit">{{
-            __('novaMediaHub.saveAndClose')
-          }}</LoadingButton>
+          <Button v-if="!readonly" @click.prevent="saveAndExit">
+            {{ __('novaMediaHub.saveAndClose') }}
+          </Button>
         </div>
       </ModalFooter>
     </LoadingCard>
@@ -83,12 +83,13 @@
 <script>
 import API from '../api';
 import MediaViewModalInfoListItem from '../components/MediaViewModalInfoListItem';
+import { Button } from 'laravel-nova-ui';
 
 export default {
   emits: ['close'],
   props: ['show', 'mediaItem', 'readonly'],
 
-  components: { MediaViewModalInfoListItem },
+  components: { MediaViewModalInfoListItem, Button },
 
   data: () => ({
     loading: false,
@@ -157,8 +158,6 @@ export default {
         value = this.mediaItem.data?.[attribute] || {};
       }
 
-      console.info({ name });
-
       return {
         name,
         attribute,
@@ -224,11 +223,12 @@ export default {
     > div:not(.nova-translatable-locale-tabs) {
       > div {
         margin-top: -25px;
+        padding-top: 8px;
 
         > div {
           width: 100%;
-          padding-left: 0;
-          padding-right: 0;
+          padding-left: 0 !important;
+          padding-right: 0 !important;
         }
       }
     }

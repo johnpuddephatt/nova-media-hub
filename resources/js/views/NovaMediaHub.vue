@@ -12,7 +12,9 @@
           v-model:selected="orderBy"
           @change="selected => (orderBy = selected)"
         />
-        <LoadingButton @click="showMediaUploadModal = true">{{ __('novaMediaHub.uploadMediaButton') }}</LoadingButton>
+        <Button @click="showMediaUploadModal = true">
+          {{ __('novaMediaHub.uploadMediaButton') }}
+        </Button>
       </div>
     </div>
 
@@ -37,7 +39,7 @@
             v-for="collectionName in collections"
             :key="collectionName"
             :href="`${basePath}/${collectionName}`"
-            class="o1-p-4 o1-bg-slate-50 o1-border-b o1-border-slate-200 hover:o1-bg-slate-100 dark:o1-border-slate-600 dark:o1-bg-slate-700 dark:hover:o1-bg-slate-800"
+            class="o1-p-4 o1-bg-slate-50 o1-capitalize o1-border-b o1-border-slate-200 hover:o1-bg-slate-100 dark:o1-border-slate-600 dark:o1-bg-slate-700 dark:hover:o1-bg-slate-800"
             :class="{ 'font-bold text-primary-500 o1-bg-slate-100': collectionName === collection }"
           >
             {{ collectionName }}
@@ -70,14 +72,16 @@
 
         <div
           id="media-items-list"
-          class="o1-w-full flex flex-wrap o1-gap-6 o1-p-4"
+          class="o1-w-full o1-h-full flex flex-wrap o1-gap-6 o1-p-4 relative"
           :class="{ 'o1-flex o1-items-center o1-justify-center': !mediaItems.length }"
         >
-          <div v-if="!mediaItems.length" class="o1-text-sm o1-text-slate-400">
+          <Loader v-if="loadingMedia" class="text-gray-300 o1-absolute o1-inset-0 o1-m-auto" width="60" />
+          <div v-else-if="!mediaItems.length" class="o1-text-sm o1-text-slate-400">
             {{ __('novaMediaHub.noMediaItemsFoundText') }}
           </div>
 
           <MediaItem
+            v-show="!loadingMedia"
             v-for="mediaItem in mediaItems"
             :key="mediaItem.id"
             :mediaItem="mediaItem"
@@ -107,6 +111,7 @@
       @close="ctxShowEvent = void 0"
       :mediaItem="ctxMediaItem"
       @optionClick="contextOptionClick"
+      @dataUpdated="getMedia"
     />
 
     <ConfirmDeleteModal :show="showConfirmDeleteModal" :mediaItem="ctxMediaItem" @close="handleDeleteModalClose" />
@@ -130,6 +135,8 @@ import MoveToCollectionModal from '../modals/MoveToCollectionModal';
 import MediaItemContextMenu from '../components/MediaItemContextMenu';
 import MediaOrderSelect from '../components/MediaOrderSelect';
 import HandlesMediaUpload from '../mixins/HandlesMediaUpload';
+import debounce from 'lodash.debounce';
+import { Button } from 'laravel-nova-ui';
 
 export default {
   mixins: [HandlesMediaLists, HandlesMediaUpload],
@@ -143,6 +150,7 @@ export default {
     MediaItemContextMenu,
     MoveToCollectionModal,
     MediaOrderSelect,
+    Button,
   },
 
   data: () => ({
@@ -161,19 +169,20 @@ export default {
   }),
 
   async created() {
-    this.collection = this.$page.props.collectionId || 'default';
+    this.collection = this.$page.props.collectionId || void 0;
 
     this.ctxOptions = [
       { name: this.__('novaMediaHub.contextViewEdit'), action: 'view' },
       { name: this.__('novaMediaHub.contextDownload'), action: 'download' },
       { name: this.__('novaMediaHub.contextMoveCollection'), action: 'move-collection' },
       { type: 'divider' },
+      { name: this.__('novaMediaHub.contextReplace'), action: 'replace', class: 'warning' },
       { name: this.__('novaMediaHub.contextDelete'), action: 'delete', class: 'warning' },
     ];
 
     this.$watch(
       () => ({ search: this.search, orderBy: this.orderBy }),
-      data => this.getMedia({ ...data, page: 1 })
+      debounce(data => this.getMedia({ ...data, page: 1 }), 400)
     );
   },
 

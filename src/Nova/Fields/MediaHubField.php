@@ -13,8 +13,6 @@ class MediaHubField extends Field
 {
     public $component = 'media-hub-field';
 
-    protected $defaultCollectionName = null;
-
     public function __construct($name, $attribute = null, $defaultCollectionName = null)
     {
         parent::__construct($name, $attribute, null);

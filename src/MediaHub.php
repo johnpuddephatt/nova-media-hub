@@ -7,17 +7,21 @@ use Laravel\Nova\Tool;
 use Illuminate\Http\Request;
 use Laravel\Nova\Menu\MenuSection;
 use Outl1ne\NovaMediaHub\Models\Media;
+use Spatie\ImageOptimizer\OptimizerChain;
 use Outl1ne\NovaMediaHub\MediaHandler\FileHandler;
-use Outl1ne\NovaMediaHub\MediaHandler\Support\Base64File;
 use Outl1ne\NovaMediaHub\MediaHandler\Support\FileNamer;
-use Outl1ne\NovaMediaHub\MediaHandler\Support\FileValidator;
 use Outl1ne\NovaMediaHub\MediaHandler\Support\PathMaker;
+use Outl1ne\NovaMediaHub\MediaHandler\Support\Base64File;
 use Outl1ne\NovaMediaHub\MediaHandler\Support\RemoteFile;
+use Outl1ne\NovaMediaHub\MediaHandler\Support\FileValidator;
+use Outl1ne\NovaMediaHub\MediaHandler\Support\MediaManipulator;
 
 class MediaHub extends Tool
 {
     public $hideFromMenu = false;
     public $customFields = [];
+
+    protected static ?OptimizerChain $optimizerChain = null;
 
     public function __construct()
     {
@@ -66,6 +70,11 @@ class MediaHub extends Tool
         return $this;
     }
 
+    public static function withOptimizerChain(?OptimizerChain $optimizerChain)
+    {
+        static::$optimizerChain = $optimizerChain;
+    }
+
     public function menu(Request $request)
     {
         if ($this->hideFromMenu) return;
@@ -77,8 +86,49 @@ class MediaHub extends Tool
 
     public static function getDataFields(): array
     {
-        $mediaHubTool = static::getSelfTool();
-        return $mediaHubTool?->customFields ?? [];
+        return static::getSelfTool()?->customFields ?? [];
+    }
+
+    public static function getOptimizerChain(): ?OptimizerChain
+    {
+        return static::$optimizerChain;
+    }
+
+    public static function defaultOptimizerChain(): OptimizerChain
+    {
+        return (new \Spatie\ImageOptimizer\OptimizerChain)
+            ->addOptimizer(new \Spatie\ImageOptimizer\Optimizers\Jpegoptim([
+                '-m85', // set maximum quality to 85%
+                '--force', // ensure that progressive generation is always done also if a little bigger
+                '--strip-all', // this strips out all text information such as comments and EXIF data
+                '--all-progressive', // this will make sure the resulting image is a progressive one
+            ]))
+
+            ->addOptimizer(new \Spatie\ImageOptimizer\Optimizers\Pngquant([
+                '--force', // required parameter for this package
+            ]))
+
+            ->addOptimizer(new \Spatie\ImageOptimizer\Optimizers\Optipng([
+                '-i0', // this will result in a non-interlaced, progressive scanned image
+                '-o2', // this set the optimization level to two (multiple IDAT compression trials)
+                '-quiet', // required parameter for this package
+            ]))
+
+            ->addOptimizer(new \Spatie\ImageOptimizer\Optimizers\Svgo([
+                '--disable=cleanupIDs', // disabling because it is known to cause troubles
+            ]))
+
+            ->addOptimizer(new \Spatie\ImageOptimizer\Optimizers\Gifsicle([
+                '-b', // required parameter for this package
+                '-O3', // this produces the slowest but best results
+            ]))
+
+            ->addOptimizer(new \Spatie\ImageOptimizer\Optimizers\Cwebp([
+                '-m 6', // for the slowest compression method in order to get the best compression.
+                '-pass 10', // for maximizing the amount of analysis pass.
+                '-mt', // multithreading for some speed improvements.
+                '-q 90', //quality factor that brings the least noticeable changes.
+            ]));
     }
 
     public static function getSelfTool(): MediaHub|null
@@ -208,6 +258,12 @@ class MediaHub extends Tool
         return new $fileValidatorClass;
     }
 
+    public static function getMediaManipulator(): MediaManipulator
+    {
+        $mediaManipulatorClass = config('nova-media-hub.media_manipulator', \Outl1ne\NovaMediaHub\MediaHandler\Support\MediaManipulator::class);
+        return new $mediaManipulatorClass;
+    }
+
     public static function fileHandler()
     {
         return new FileHandler();
@@ -217,20 +273,6 @@ class MediaHub extends Tool
     {
         $optimizableMimeTypes = config('nova-media-hub.optimizable_mime_types');
         return in_array($media->mime_type, $optimizableMimeTypes);
-    }
-
-    public static function shouldOptimizeOriginal(Media $media)
-    {
-        $ogRules = config('nova-media-hub.original_image_manipulations');
-        if (!$ogRules['optimize']) return false;
-
-        $allConversions = static::getConversions();
-
-        $allOgDisabled = $allConversions['*']['original'] ?? null;
-        $appliesToCollectionConv = $allConversions[$media->collection_name]['original'] ?? null;
-        if ($allOgDisabled === false || $appliesToCollectionConv === false) return false;
-
-        return $ogRules;
     }
 
     public static function getLocales()

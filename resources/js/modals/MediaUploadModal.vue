@@ -12,7 +12,7 @@
 
         <ModalContent class="px-8 o1-flex o1-flex-col">
           <!-- Select existing collection -->
-          <span>{{ __('novaMediaHub.uploadModalSelectCollectionTitle') }}</span>
+          <span class="o1-mb-2">{{ __('novaMediaHub.uploadModalSelectCollectionTitle') }}</span>
           <SelectControl v-model:selected="selectedCollection" @change="c => (selectedCollection = c)">
             <option value="media-hub-new-collection" v-if="canCreateCollections">
               {{ __('novaMediaHub.uploadModalCreateNewOption') }}
@@ -37,11 +37,13 @@
 
       <ModalFooter>
         <div class="ml-auto">
-          <LoadingButton @click.prevent="$emit('close')" class="o1-mr-4">
+          <Button @click.prevent="$emit('close')" class="o1-mr-4">
             {{ __('novaMediaHub.closeButton') }}
-          </LoadingButton>
+          </Button>
 
-          <LoadingButton @click.prevent="uploadFiles">{{ __('novaMediaHub.uploadFilesButton') }}</LoadingButton>
+          <Button @click.prevent="uploadFiles">
+            {{ __('novaMediaHub.uploadFilesButton') }}
+          </Button>
         </div>
       </ModalFooter>
     </LoadingCard>
@@ -51,8 +53,10 @@
 <script>
 import API from '../api';
 import HandlesMediaUpload from '../mixins/HandlesMediaUpload';
+import { Button } from 'laravel-nova-ui';
 
 export default {
+  components: { Button },
   mixins: [HandlesMediaUpload],
   emits: ['close'],
   props: ['show', 'activeCollection'],
@@ -73,7 +77,7 @@ export default {
     async show(newValue) {
       if (newValue) {
         await this.getCollections();
-        this.selectedCollection = this.activeCollection;
+        this.selectedCollection = this.activeCollection || this.collections[0];
       }
     },
   },

@@ -16,8 +16,11 @@ class MediaHubController extends Controller
     {
         $defaultCollections = MediaHub::getDefaultCollections();
 
-        $collections = MediaHub::getMediaModel()::pluck('collection_name')
+        $collections = MediaHub::getMediaModel()
+            ::distinct()
+            ->pluck('collection_name')
             ->merge($defaultCollections)
+            ->map(fn ($name) => str($name)->lower())
             ->unique()
             ->values()
             ->toArray();
@@ -134,24 +137,57 @@ class MediaHubController extends Controller
         $media = MediaHub::getQuery()->findOrFail($mediaId);
         $locales = MediaHub::getLocales();
         $fieldKeys = array_keys(MediaHub::getDataFields());
+        $mediaData = is_array($media->data) ? $media->data : json_decode($media->data ?? '[]', true);
 
         // No translations, we hardcoded frontend to always send data as 'en'
-        if (empty($locales)) {
-            $mediaData = $media->data;
-            foreach ($fieldKeys as $key) {
-                $mediaData[$key] = $request->input("{$key}.en") ?? null;
-            }
-            $media->data = $mediaData;
-        } else {
-            $mediaData = $media->data;
-            foreach ($fieldKeys as $key) {
-                $mediaData[$key] = $request->input($key) ?? null;
-            }
-            $media->data = $mediaData;
+        foreach ($fieldKeys as $key) {
+            $mediaData[$key] = $request->input(empty($locales) ? "{$key}.en" : $key) ?? null;
         }
 
+        $media->data = $mediaData;
         $media->save();
 
         return response()->json($media, 200);
+    }
+
+    public function replaceMediaInPlace(Request $request, $mediaId)
+    {
+        $file = $request->allFiles()['file'] ?? null;
+        if (!$file) return response()->json(['error' => 'File required.'], 400);
+
+        /** @var \Outl1ne\NovaMediaHub\Models\Media */
+        $media = MediaHub::getQuery()->findOrFail($mediaId);
+
+        $newMediaItem = null;
+        try {
+            $newMediaItem = MediaHub::fileHandler()
+                ->withModelData([
+                    'id' => $media->id,
+                    'created_at' => $media->created_at,
+                    'collection_name' => $media->collection_name,
+                ])
+                ->allowDuplicates()
+                ->withFile($file)
+                ->deleteOriginal()
+                ->save();
+
+            if ($media->original_file_hash !== $newMediaItem->original_file_hash) {
+                /** @var Filesystem */
+                $fileSystem = app()->make(Filesystem::class);
+                $fileSystem->deleteFromMediaLibrary($media);
+            }
+        } catch (Exception $e) {
+            report($e);
+
+            return response()->json([
+                'error' => $e->getMessage(),
+                'success' => false,
+            ], 400);
+        }
+
+        return response()->json([
+            'media' => $newMediaItem->formatForNova(),
+            'success' => true,
+        ], 200);
     }
 }
